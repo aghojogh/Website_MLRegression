@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ML Regression Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #050810;
+    --surface: #0d1117;
+    --card: #111827;
+    --border: rgba(99,202,183,0.15);
+    --accent: #63cab7;
+    --accent2: #f97316;
+    --accent3: #818cf8;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --glow: 0 0 40px rgba(99,202,183,0.2);
+  }
+
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* ── Custom cursor ── */
+  #cursor {
+    position: fixed; width:12px; height:12px;
+    background: var(--accent); border-radius:50%;
+    pointer-events:none; z-index:9999;
+    transform: translate(-50%,-50%);
+    transition: transform 0.1s, background 0.2s;
+    mix-blend-mode: screen;
+  }
+  #cursor-ring {
+    position: fixed; width:36px; height:36px;
+    border: 1.5px solid var(--accent);
+    border-radius:50%; pointer-events:none; z-index:9998;
+    transform: translate(-50%,-50%);
+    transition: all 0.15s ease;
+    opacity: 0.5;
+  }
+
+  /* ── Canvas ── */
+  #canvas {
+    position:fixed; top:0; left:0;
+    width:100%; height:100%;
+    z-index:0; pointer-events:none;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed; top:0; left:0; right:0;
+    z-index:100;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 1.2rem 3rem;
+    background: rgba(5,8,16,0.7);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo {
+    font-family:'Syne',sans-serif; font-weight:800;
+    font-size:1.1rem; color:var(--accent); letter-spacing:0.05em;
+  }
+  .nav-links { display:flex; gap:2rem; list-style:none; }
+  .nav-links a {
+    color:var(--muted); text-decoration:none; font-size:0.75rem;
+    letter-spacing:0.1em; text-transform:uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color:var(--accent); }
+
+  /* ── Sections ── */
+  section { position:relative; z-index:1; }
+
+  /* ── Hero ── */
+  #hero {
+    min-height:100vh;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center; padding: 6rem 2rem 4rem;
+  }
+  .badge {
+    display:inline-flex; align-items:center; gap:0.5rem;
+    font-size:0.7rem; letter-spacing:0.15em; text-transform:uppercase;
+    color:var(--accent); border:1px solid var(--border);
+    padding:0.4rem 1rem; border-radius:100px;
+    margin-bottom:2rem;
+    animation: fadeUp 0.6s 0.1s both;
+  }
+  .badge::before {
+    content:''; width:6px; height:6px;
+    background:var(--accent); border-radius:50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100%{opacity:1;transform:scale(1)}
+    50%{opacity:0.4;transform:scale(1.4)}
+  }
+
+  h1 {
+    font-family:'Syne',sans-serif; font-weight:800;
+    font-size: clamp(3rem, 8vw, 7rem);
+    line-height:1; letter-spacing:-0.03em;
+    animation: fadeUp 0.7s 0.2s both;
+  }
+  h1 span { color:var(--accent); }
+  .subtitle {
+    margin-top:1.5rem; color:var(--muted);
+    font-size:0.9rem; max-width:520px; line-height:1.8;
+    animation: fadeUp 0.7s 0.35s both;
+  }
+  .hero-cta {
+    margin-top:2.5rem; display:flex; gap:1rem; flex-wrap:wrap; justify-content:center;
+    animation: fadeUp 0.7s 0.5s both;
+  }
+  .btn {
+    display:inline-flex; align-items:center; gap:0.5rem;
+    padding:0.8rem 1.8rem; border-radius:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:0.8rem; font-weight:600; letter-spacing:0.05em;
+    cursor:none; text-decoration:none; transition: all 0.25s;
+    border: none;
+  }
+  .btn-primary {
+    background:var(--accent); color:#050810;
+  }
+  .btn-primary:hover {
+    background:#fff; box-shadow: 0 0 30px rgba(99,202,183,0.5);
+    transform:translateY(-2px);
+  }
+  .btn-outline {
+    background:transparent; color:var(--accent);
+    border:1px solid var(--border);
+  }
+  .btn-outline:hover {
+    border-color:var(--accent); background:rgba(99,202,183,0.06);
+    transform:translateY(-2px);
+  }
+
+  /* ── Metrics strip ── */
+  .metrics-strip {
+    display:flex; justify-content:center; flex-wrap:wrap;
+    gap: 0; margin: 3rem auto 0; max-width:700px;
+    border:1px solid var(--border); border-radius:12px;
+    overflow:hidden; animation: fadeUp 0.7s 0.65s both;
+  }
+  .metric-item {
+    flex:1; min-width:140px;
+    padding:1.4rem 1.5rem;
+    text-align:center;
+    border-right:1px solid var(--border);
+    background:rgba(13,17,23,0.8);
+    transition: background 0.2s;
+  }
+  .metric-item:last-child { border-right:none; }
+  .metric-item:hover { background: rgba(99,202,183,0.05); }
+  .metric-val {
+    font-family:'Syne',sans-serif; font-size:1.8rem;
+    font-weight:800; color:var(--accent);
+  }
+  .metric-label {
+    font-size:0.65rem; color:var(--muted);
+    letter-spacing:0.12em; text-transform:uppercase;
+    margin-top:0.3rem;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(24px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── Models section ── */
+  #models {
+    padding: 7rem 3rem;
+    max-width:1100px; margin:0 auto;
+  }
+  .section-label {
+    font-size:0.7rem; letter-spacing:0.2em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:0.8rem;
+  }
+  .section-title {
+    font-family:'Syne',sans-serif; font-size: clamp(2rem,4vw,3rem);
+    font-weight:800; line-height:1.1; margin-bottom:3rem;
+  }
+  .models-grid {
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr));
+    gap:1.5rem;
+  }
+  .model-card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:1.8rem;
+    transition: all 0.3s; position:relative; overflow:hidden;
+  }
+  .model-card::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, transparent, var(--c, var(--accent)), transparent);
+    opacity:0; transition:opacity 0.3s;
+  }
+  .model-card:hover { transform:translateY(-6px); box-shadow: var(--glow); border-color:rgba(99,202,183,0.3); }
+  .model-card:hover::before { opacity:1; }
+
+  .model-icon {
+    font-size:2rem; margin-bottom:1rem;
+  }
+  .model-name {
+    font-family:'Syne',sans-serif; font-weight:700;
+    font-size:1.1rem; margin-bottom:0.5rem;
+  }
+  .model-desc { font-size:0.75rem; color:var(--muted); line-height:1.7; margin-bottom:1.2rem; }
+  .model-r2 {
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .r2-label { font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .r2-val { font-size:1rem; font-weight:600; color:var(--c, var(--accent)); }
+  .r2-bar-wrap {
+    height:3px; background:rgba(255,255,255,0.06);
+    border-radius:2px; margin-top:0.7rem; overflow:hidden;
+  }
+  .r2-bar {
+    height:100%; background:var(--c, var(--accent));
+    border-radius:2px; width:0;
+    transition: width 1.2s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  /* ── Pipeline section ── */
+  #pipeline {
+    padding: 7rem 3rem;
+    background: linear-gradient(180deg, transparent, rgba(99,202,183,0.03), transparent);
+  }
+  .pipeline-inner { max-width:900px; margin:0 auto; }
+  .steps {
+    display:flex; flex-direction:column; gap:0;
+    margin-top:3rem; position:relative;
+  }
+  .steps::before {
+    content:''; position:absolute;
+    left:28px; top:0; bottom:0; width:1px;
+    background:linear-gradient(180deg,var(--accent),var(--accent3),transparent);
+    opacity:0.3;
+  }
+  .step {
+    display:flex; gap:1.5rem; align-items:flex-start;
+    padding:1.5rem 0; opacity:0;
+    transform:translateX(-20px);
+    transition: all 0.5s;
+  }
+  .step.visible { opacity:1; transform:none; }
+  .step-num {
+    width:56px; height:56px; flex-shrink:0;
+    border-radius:50%; border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif; font-weight:800;
+    font-size:1rem; color:var(--accent);
+    background:var(--surface); position:relative; z-index:1;
+  }
+  .step-content { padding-top:0.8rem; }
+  .step-title { font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; margin-bottom:0.4rem; }
+  .step-text { font-size:0.78rem; color:var(--muted); line-height:1.8; }
+  .step-code {
+    margin-top:0.8rem; padding:0.8rem 1rem;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; font-size:0.72rem; color:var(--accent3);
+    font-family:'JetBrains Mono',monospace; overflow-x:auto;
+  }
+
+  /* ── Tech stack ── */
+  #tech {
+    padding: 7rem 3rem;
+    max-width:1100px; margin:0 auto; text-align:center;
+  }
+  .tech-grid {
+    display:flex; flex-wrap:wrap; gap:1rem;
+    justify-content:center; margin-top:3rem;
+  }
+  .tech-pill {
+    display:flex; align-items:center; gap:0.6rem;
+    padding:0.7rem 1.4rem; border-radius:100px;
+    border:1px solid var(--border); background:var(--card);
+    font-size:0.78rem; transition:all 0.25s;
+  }
+  .tech-pill:hover {
+    border-color:var(--accent); color:var(--accent);
+    transform:translateY(-3px); box-shadow: var(--glow);
+  }
+  .tech-dot { width:8px; height:8px; border-radius:50%; }
+
+  /* ── Footer ── */
+  footer {
+    border-top:1px solid var(--border);
+    padding:2rem 3rem;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:1rem;
+    font-size:0.72rem; color:var(--muted);
+    position:relative; z-index:1;
+  }
+  footer a { color:var(--accent); text-decoration:none; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  @media(max-width:600px){
+    nav { padding:1rem 1.5rem; }
+    #models, #pipeline, #tech { padding:5rem 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+<canvas id="canvas"></canvas>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">// ML·PIPELINE</div>
+  <ul class="nav-links">
+    <li><a href="#models">Models</a></li>
+    <li><a href="#pipeline">Pipeline</a></li>
+    <li><a href="#tech">Stack</a></li>
+    <li><a href="https://github.com" target="_blank">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="badge">scikit-learn · python 3.13</div>
+  <h1>Regression<br/><span>Pipeline</span></h1>
+  <p class="subtitle">
+    A production-grade ML pipeline comparing four regression models on the
+    California Housing dataset — with cross-validation, feature importance, and visualizations.
+  </p>
+  <div class="hero-cta">
+    <a href="#models" class="btn btn-primary">↓ Explore Models</a>
+    <a href="https://github.com" class="btn btn-outline" target="_blank">View on GitHub</a>
+  </div>
+  <div class="metrics-strip">
+    <div class="metric-item">
+      <div class="metric-val" data-count="20640">0</div>
+      <div class="metric-label">Training Rows</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-val" data-count="8">0</div>
+      <div class="metric-label">Features</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-val">4</div>
+      <div class="metric-label">Models Tested</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-val">5×CV</div>
+      <div class="metric-label">Validation</div>
+    </div>
+  </div>
+</section>
+
+<!-- MODELS -->
+<section id="models">
+  <div class="section-label">// 01 — Models</div>
+  <h2 class="section-title">Four algorithms.<br/>One winner.</h2>
+  <div class="models-grid">
+    <div class="model-card" style="--c:#63cab7">
+      <div class="model-icon">📐</div>
+      <div class="model-name">Linear Regression</div>
+      <div class="model-desc">The baseline. Fits a hyperplane through the data with ordinary least squares. Fast and interpretable.</div>
+      <div class="model-r2">
+        <span class="r2-label">R² Score</span>
+        <span class="r2-val">0.6037</span>
+      </div>
+      <div class="r2-bar-wrap"><div class="r2-bar" data-w="60"></div></div>
+    </div>
+    <div class="model-card" style="--c:#818cf8">
+      <div class="model-icon">🔷</div>
+      <div class="model-name">Ridge Regression</div>
+      <div class="model-desc">Linear regression with L2 regularisation. Prevents overfitting on correlated features.</div>
+      <div class="model-r2">
+        <span class="r2-label">R² Score</span>
+        <span class="r2-val">0.6060</span>
+      </div>
+      <div class="r2-bar-wrap"><div class="r2-bar" data-w="61"></div></div>
+    </div>
+    <div class="model-card" style="--c:#34d399">
+      <div class="model-icon">🌲</div>
+      <div class="model-name">Random Forest</div>
+      <div class="model-desc">100 decision trees, averaged. Captures non-linearities and handles outliers robustly.</div>
+      <div class="model-r2">
+        <span class="r2-label">R² Score</span>
+        <span class="r2-val">0.8050</span>
+      </div>
+      <div class="r2-bar-wrap"><div class="r2-bar" data-w="81"></div></div>
+    </div>
+    <div class="model-card" style="--c:#f97316">
+      <div class="model-icon">🚀</div>
+      <div class="model-name">Gradient Boosting</div>
+      <div class="model-desc">200 sequential trees, each correcting the last. Best performer. State-of-the-art on tabular data.</div>
+      <div class="model-r2">
+        <span class="r2-label">R² Score</span>
+        <span class="r2-val">0.8571</span>
+      </div>
+      <div class="r2-bar-wrap"><div class="r2-bar" data-w="86"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline">
+  <div class="pipeline-inner">
+    <div class="section-label">// 02 — Architecture</div>
+    <h2 class="section-title">How the pipeline works.</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <div class="step-title">Load & Explore</div>
+          <div class="step-text">Fetch the California Housing dataset directly from sklearn. Inspect shape, statistics, and check for missing values.</div>
+          <div class="step-code">housing = fetch_california_housing(as_frame=True)</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <div class="step-title">Train / Test Split</div>
+          <div class="step-text">80% training, 20% held-out test set. Fixed random seed ensures reproducibility.</div>
+          <div class="step-code">train_test_split(X, y, test_size=0.2, random_state=42)</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <div class="step-title">Preprocessing Pipeline</div>
+          <div class="step-text">Each model is wrapped in an sklearn Pipeline with StandardScaler — preventing data leakage between folds.</div>
+          <div class="step-code">Pipeline([("scaler", StandardScaler()), ("model", ...)])</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <div class="step-title">Train & Evaluate</div>
+          <div class="step-text">All 4 models are trained and scored on RMSE, MAE, R², and 5-fold cross-validated R².</div>
+          <div class="step-code">cross_val_score(pipeline, X_train, y_train, cv=5)</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <div class="step-title">Visualise & Compare</div>
+          <div class="step-text">4 charts: model comparison bar, actual vs predicted scatter, residual plot, and feature importances.</div>
+          <div class="step-code">plt.savefig("regression_results.png", dpi=150)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="tech">
+  <div class="section-label">// 03 — Stack</div>
+  <h2 class="section-title">Built with.</h2>
+  <div class="tech-grid">
+    <div class="tech-pill"><span class="tech-dot" style="background:#3b82f6"></span>Python 3.13</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#f97316"></span>scikit-learn</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#63cab7"></span>pandas</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#818cf8"></span>NumPy</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#34d399"></span>Matplotlib</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#f43f5e"></span>Seaborn</div>
+    <div class="tech-pill"><span class="tech-dot" style="background:#facc15"></span>California Housing Dataset</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <span>// ML Regression Pipeline — scikit-learn</span>
+  <span>Built with Python · <a href="https://github.com" target="_blank">GitHub ↗</a></span>
+</footer>
+
+<script>
+// ── Cursor ──────────────────────────────────────────
+const cursor = document.getElementById('cursor');
+const ring   = document.getElementById('cursor-ring');
+let mx=0,my=0,rx=0,ry=0;
+
+document.addEventListener('mousemove', e=>{
+  mx=e.clientX; my=e.clientY;
+  cursor.style.left=mx+'px'; cursor.style.top=my+'px';
+});
+function animRing(){
+  rx+=(mx-rx)*0.12; ry+=(my-ry)*0.12;
+  ring.style.left=rx+'px'; ring.style.top=ry+'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+
+document.querySelectorAll('a,.btn,.model-card,.tech-pill').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{
+    cursor.style.transform='translate(-50%,-50%) scale(2.5)';
+    ring.style.opacity='0.15';
+  });
+  el.addEventListener('mouseleave',()=>{
+    cursor.style.transform='translate(-50%,-50%) scale(1)';
+    ring.style.opacity='0.5';
+  });
+});
+
+// ── Particle canvas ──────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+let W, H, particles=[];
+
+function resize(){ W=canvas.width=innerWidth; H=canvas.height=innerHeight; }
+resize(); window.addEventListener('resize',resize);
+
+function rand(a,b){ return a+Math.random()*(b-a); }
+
+class Particle {
+  constructor(){
+    this.x=rand(0,W); this.y=rand(0,H);
+    this.vx=rand(-0.15,0.15); this.vy=rand(-0.15,0.15);
+    this.r=rand(1,2.5); this.life=rand(0,1);
+    this.speed=rand(0.003,0.006);
+  }
+  update(){
+    this.x+=this.vx; this.y+=this.vy;
+    this.life+=this.speed;
+    if(this.x<0||this.x>W||this.y<0||this.y>H||this.life>1){
+      this.x=rand(0,W); this.y=rand(0,H); this.life=0;
+    }
+  }
+  draw(){
+    const alpha=Math.sin(this.life*Math.PI)*0.4;
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(99,202,183,${alpha})`;
+    ctx.fill();
+  }
+}
+
+for(let i=0;i<120;i++) particles.push(new Particle());
+
+// Draw connections
+function drawLines(){
+  for(let i=0;i<particles.length;i++){
+    for(let j=i+1;j<particles.length;j++){
+      const dx=particles[i].x-particles[j].x;
+      const dy=particles[i].y-particles[j].y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<120){
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x,particles[i].y);
+        ctx.lineTo(particles[j].x,particles[j].y);
+        ctx.strokeStyle=`rgba(99,202,183,${0.12*(1-dist/120)})`;
+        ctx.lineWidth=0.5;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  particles.forEach(p=>{p.update();p.draw();});
+  drawLines();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ── Count-up animation ───────────────────────────────
+function countUp(el, target){
+  let start=0;
+  const step=target/80;
+  const timer=setInterval(()=>{
+    start+=step;
+    if(start>=target){ el.textContent=target.toLocaleString(); clearInterval(timer); return; }
+    el.textContent=Math.floor(start).toLocaleString();
+  },16);
+}
+document.querySelectorAll('[data-count]').forEach(el=>{
+  countUp(el, parseInt(el.dataset.count));
+});
+
+// ── Scroll-triggered animations ──────────────────────
+const observer = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.classList.add('visible');
+      // Animate R² bars
+      e.target.querySelectorAll&&e.target.querySelectorAll('.r2-bar').forEach(bar=>{
+        bar.style.width=bar.dataset.w+'%';
+      });
+    }
+  });
+},{threshold:0.15});
+
+document.querySelectorAll('.step,.model-card').forEach(el=>observer.observe(el));
+
+// Trigger bars on model cards separately
+const cardObserver = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.querySelector('.r2-bar').style.width=e.target.querySelector('.r2-bar').dataset.w+'%';
+    }
+  });
+},{threshold:0.3});
+document.querySelectorAll('.model-card').forEach(el=>cardObserver.observe(el));
+
+// ── Nav active scroll ─────────────────────────────────
+const sections = document.querySelectorAll('section[id]');
+window.addEventListener('scroll',()=>{
+  const y=window.scrollY+200;
+  sections.forEach(s=>{
+    const link=document.querySelector(`.nav-links a[href="#${s.id}"]`);
+    if(!link) return;
+    if(y>=s.offsetTop && y<s.offsetTop+s.offsetHeight){
+      link.style.color='var(--accent)';
+    } else {
+      link.style.color='';
+    }
+  });
+});
+</script>
+</body>
+</html>
